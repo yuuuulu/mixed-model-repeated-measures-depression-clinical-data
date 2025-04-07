@@ -1,0 +1,1493 @@
+---
+title: "Tigermed-data-about-depression-clinical-trial"
+format: html
+editor: visual
+---
+
+# compareGroups
+
+```{r}
+# 将SITEID分为5组
+library(dplyr)
+library(dplyr)
+library(compareGroups)
+library(readxl)
+data0 <- read_excel("/Users/luyu/Desktop/3.xlsx")
+
+# 将SITEID转换为数值型变量
+data0 <- data0 %>%
+  mutate(SITEID_num = as.numeric(factor(SITEID)))
+
+# 使用ntile函数分组
+data0 <- data0 %>%
+  mutate(SITEID_group = paste0("Group", ntile(SITEID_num, 5)))
+
+
+data0$SITEID_group <- as.factor(data0$SITEID_group)
+
+
+
+data0$madrsc <- ifelse(data0$BASE > 40, "MADRS SCORE ≥ 40"," MADRS SCORE < 40")
+
+data0$TRT01A <- as.factor(data0$TRT01A)
+data0$TRT01A <- relevel(data0$TRT01A, ref = "Dummy A")
+data0$SEX <- as.factor(data0$SEX)
+data0$RACE <- as.factor(data0$RACE)
+data0$RACE <- relevel(data0$RACE, ref = "WHITE")
+
+
+
+# 选择变量并创建表格
+data_table1 <- data0 %>%
+  select(madrsc, AGE, SEX, RACE, TRT01A, PCHG, CHG, BASE, AVAL,SITEID_group )
+
+# 检查变量类型
+str(data_table1)
+
+# 检查样本量
+table(data_table1$madrsc)
+
+# 创建比较表格
+table1 <- compareGroups(madrsc~., data = data_table1)
+
+# 如果仍然出现警告，可以尝试使用其他方法来处理变量的尺度差异
+# 或者检查数据是否存在数据分离问题等
+table1 <- createTable(table1, show.all = TRUE, hide.no = "no",
+                      show.p.overall=TRUE)
+table1
+summary(table1)
+
+
+?compareGroups
+```
+
+```{r}
+library(dplyr)
+library(compareGroups)
+data0 <- read_excel("/Users/luyu/Desktop/3.xlsx")
+
+data0$madrsc <- ifelse(data0$BASE > 40, "MADRS SCORE ≥ 40"," MADRS SCORE < 40")
+
+data0$AGE <- scale(data0$AGE)
+data0$AVAL <- scale(data0$AVAL)
+data0$BASE <- scale(data0$BASE)
+data0$TRT01A <- as.factor(data0$TRT01A)
+data0$TRT01A <- relevel(data0$TRT01A, ref = "Dummy A")
+data0$SEX <- as.factor(data0$SEX)
+data0$RACE <- as.factor(data0$RACE)
+data0$RACE <- relevel(data0$RACE, ref = "WHITE")
+
+
+data0$PCHG <- scale(data0$PCHG)
+
+data_table1 <- data0 %>%
+  select(madrsc, AGE, SEX, RACE, TRT01A, PCHG, CHG, BASE, AVAL)
+
+table1 <- compareGroups(madrsc~., data = data_table1)
+
+table1 <- createTable(table1, show.all = TRUE, hide.no = "no",
+                      show.p.overall=TRUE)
+table1
+summary(table1)
+```
+
+# main result
+
+```{r}
+
+library(readxl)
+library(mmrm)
+library(ggplot2)
+library(dplyr)
+
+
+admadrs <- read_excel("/Users/luyu/Desktop/3.xlsx", 
+                      sheet = "Sheet1", col_names = TRUE, 
+                      col_types = NULL, na = "", skip = 0)
+# 创建分类变量 base_situation
+admadrs$base_situation <- cut(
+  admadrs$BASE,
+  breaks = c( 9, 19, 39, Inf),
+  labels = c("10-19", "20-39", "40+"),
+
+)
+
+
+
+# 将 base_situation 转换为因子类型
+admadrs$base_situation <- as.factor(admadrs$base_situation)
+
+admadrs$USUBJID <- factor(admadrs$USUBJID)
+admadrs$AVISITN <- admadrs$AVISITN - 20000
+admadrs$AVISITN <- factor(admadrs$AVISITN)
+admadrs$CHG <- as.numeric(admadrs$CHG)
+
+admadrs$base_situation <- relevel(admadrs$base_situation, ref = "40+")
+
+# Delete a duplicate point in time
+admadrs <- admadrs[!duplicated(admadrs[c("USUBJID", "AVISIT")]), ]
+
+# scale data 
+admadrs$AGE <- scale(admadrs$AGE)
+admadrs$AVAL <- scale(admadrs$AVAL)
+
+
+
+
+# 更新模型以包括 base_situation
+fit <- mmrm(
+  formula = AVAL ~ AVISITN:TRT01A +TRT01A + SITEID+ RACE + AGE + base_situation + us(AVISITN | USUBJID),
+  data = admadrs)
+
+# 获取模型摘要
+model_summary <- summary(fit)
+
+model_summary
+```
+
+# draw ci
+
+```{r}
+library(ggplot2)
+library(dplyr)
+# 提取系数估计值和标准误差，并筛选出包含 "SITE" 的系数
+coef_table <- as.data.frame(model_summary$coefficients)
+
+
+# 计算置信区间
+coef_table$LowerCI <- coef_table$Estimate - 1.96 * coef_table$`Std. Error`
+coef_table$UpperCI <- coef_table$Estimate + 1.96 * coef_table$`Std. Error`
+
+
+# 美化P值显示
+format_pvalue <- function(p) {
+  ifelse(p < 0.001, "<0.001", 
+         ifelse(p < 0.01, sprintf("%.3f", p),
+                sprintf("%.2f", p)))
+}
+
+result_table <- data.frame(
+  variable = rownames(model_summary$coefficients),
+  Coefficient = round(coef_table$Estimate, 3),
+  CI = paste0("(", round(coef_table$LowerCI, 3), ", ", round(coef_table$UpperCI, 3), ")"),
+  `P-value` = sapply(coef_table$`Pr(>|t|)`, format_pvalue)
+)
+
+result_table
+# 导出到Excel
+#library(writexl)
+#write_xlsx(result_table, "mmrm_results.xlsx")
+
+
+
+
+
+
+
+
+
+```
+# main result with controling sex
+
+```{r}
+
+library(readxl)
+library(mmrm)
+library(ggplot2)
+library(dplyr)
+
+
+admadrs <- read_excel("/Users/luyu/Desktop/3.xlsx", 
+                      sheet = "Sheet1", col_names = TRUE, 
+                      col_types = NULL, na = "", skip = 0)
+# 创建分类变量 base_situation
+admadrs$base_situation <- cut(
+  admadrs$BASE,
+  breaks = c( 9, 19, 39, Inf),
+  labels = c("10-19", "20-39", "40+"),
+
+)
+
+
+
+# 将 base_situation 转换为因子类型
+admadrs$base_situation <- as.factor(admadrs$base_situation)
+
+admadrs$USUBJID <- factor(admadrs$USUBJID)
+admadrs$AVISITN <- admadrs$AVISITN - 20000
+admadrs$AVISITN <- factor(admadrs$AVISITN)
+admadrs$CHG <- as.numeric(admadrs$CHG)
+
+admadrs$base_situation <- relevel(admadrs$base_situation, ref = "40+")
+
+# Delete a duplicate point in time
+admadrs <- admadrs[!duplicated(admadrs[c("USUBJID", "AVISIT")]), ]
+
+# scale data 
+admadrs$AGE <- scale(admadrs$AGE)
+admadrs$AVAL <- scale(admadrs$AVAL)
+
+
+
+
+# 更新模型以包括 base_situation
+fit <- mmrm(
+  formula = AVAL ~ AVISITN:TRT01A +TRT01A +SEX+ SITEID+ RACE + AGE + base_situation + us(AVISITN | USUBJID),
+  data = admadrs)
+
+# 获取模型摘要
+model_summary <- summary(fit)
+
+model_summary
+```
+
+# draw ci
+
+```{r}
+library(ggplot2)
+library(dplyr)
+# 提取系数估计值和标准误差，并筛选出包含 "SITE" 的系数
+coef_table <- as.data.frame(model_summary$coefficients)
+
+
+# 计算置信区间
+coef_table$LowerCI <- coef_table$Estimate - 1.96 * coef_table$`Std. Error`
+coef_table$UpperCI <- coef_table$Estimate + 1.96 * coef_table$`Std. Error`
+
+
+# 美化P值显示
+format_pvalue <- function(p) {
+  ifelse(p < 0.001, "<0.001", 
+         ifelse(p < 0.01, sprintf("%.3f", p),
+                sprintf("%.2f", p)))
+}
+
+result_table <- data.frame(
+  variable = rownames(model_summary$coefficients),
+  Coefficient = round(coef_table$Estimate, 3),
+  CI = paste0("(", round(coef_table$LowerCI, 3), ", ", round(coef_table$UpperCI, 3), ")"),
+  `P-value` = sapply(coef_table$`Pr(>|t|)`, format_pvalue)
+)
+
+result_table
+# 导出到Excel
+#library(writexl)
+#write_xlsx(result_table, "mmrm_results.xlsx")
+
+
+
+
+
+
+
+
+
+```
+
+# lm
+
+```{r}
+
+
+# 使用 lm 拟合线性模型
+fit_lm <- lm(
+  formula = AVAL ~ AVISITN:TRT01A +TRT01A + SITEID+ RACE + AGE + base_situation,
+  data = admadrs
+)
+
+summary(fit_lm)
+
+AIC(fit_lm)
+BIC(fit_lm)
+logLik(fit_lm)
+```
+
+
+# draw subgroups
+
+
+
+## ≥18 to 24 young adults
+
+```r
+# 加载必要的包
+library(readxl)
+library(mmrm)
+library(ggplot2)
+
+?mmrm
+# 读取数据
+admadrs <- read_excel("/Users/qiujiahui/Desktop/≥18 to 24 young adults.xlsx", 
+                      sheet = "Sheet1", col_names = TRUE, 
+                      col_types = NULL, na = "", skip = 0)
+head(admadrs)
+
+# 删除重复的时间点
+admadrs <- admadrs[!duplicated(admadrs[c("USUBJID", "AVISIT")]), ]
+
+# 将相关列转换为因子
+admadrs$USUBJID <- factor(admadrs$USUBJID)
+admadrs$AVISITN <- factor(admadrs$AVISITN)
+admadrs$ADY <- as.factor(admadrs$ADY)
+admadrs$SITEID <- as.factor(admadrs$SITEID)
+admadrs$TRTSEQA <- as.factor(admadrs$TRTSEQA)
+admadrs$BASE <- as.numeric(admadrs$BASE)
+
+# 将 TRT01A 转换为因子，并重新编码参考水平
+admadrs$TRT01A <- as.factor(admadrs$TRT01A)
+admadrs$TRT01A <- relevel(admadrs$TRT01A, ref = "Dummy A")
+
+#admadrs$AVISITN <- relevel(admadrs$AVISITN, ref = "")
+
+# 对数值型变量进行归一化处理
+
+
+str(admadrs$BASE)
+
+# 拟合模型
+fit <- mmrm(
+  formula = AVAL ~ AVISITN:TRT01A + TRT01A+ SEX + RACE + SITEID  + us(AVISITN | USUBJID),
+  data = admadrs
+)
+
+# 查看模型结果
+model_summary <- summary(fit)
+print(model_summary)
+
+
+```
+##  ≥18 to 24 young adults 分析
+```r
+
+# 加载必要的包
+library(emmeans)
+library(ggplot2)
+library(dplyr)
+
+############## 年龄组分析 ##############
+cat("\n### 年龄组分析 ###\n")
+
+# 重新计算边际均值
+emm_young <- emmeans(fit, ~ AVISITN | TRT01A)
+print(emm_young)
+
+# 基线和时间点设置
+baseline_level <- "0"  # 假设基线是0，请调整为实际值
+
+# 获取AVISITN的水平
+avisitn_levels <- levels(admadrs$AVISITN)
+time_points <- avisitn_levels[avisitn_levels != baseline_level]
+
+# 如果AVISITN是数值而不是因子
+if(length(avisitn_levels) == 0) {
+  cat("AVISITN似乎不是因子或没有水平，尝试获取唯一值...\n")
+  avisitn_values <- sort(unique(admadrs$AVISITN))
+  avisitn_values <- as.character(avisitn_values)
+  baseline_level <- as.character(min(as.numeric(avisitn_values)))
+  time_points <- avisitn_values[avisitn_values != baseline_level]
+}
+
+cat("基线:", baseline_level, "\n")
+cat("比较时间点:", time_points, "\n")
+
+# 执行对比分析
+tryCatch({
+  # 对每个治疗组，计算各时间点与基线的对比
+  comparisons_young <- contrast(emm_young, method = "revpairwise", by = "TRT01A")
+  cat("\n年轻成人组的时间点比较:\n")
+  print(comparisons_young)
+  
+  # 保存结果
+  results_young <- as.data.frame(comparisons_young)
+  results_young$AgeGroup <- "Young Adults (18-24)"
+  
+}, error = function(e) {
+  cat("年轻成人组的对比分析出错:", conditionMessage(e), "\n")
+  results_young <- data.frame()
+})
+
+```
+
+
+## middle-aged adults (≥24 to 55 years)
+```r
+# 加载必要的包
+library(readxl)
+library(mmrm)
+library(ggplot2)
+
+?mmrm
+# 读取数据
+admadrs <- read_excel("/Users/qiujiahui/Desktop/≥24 to 55 middle-aged adults.xlsx", 
+                      sheet = "Sheet1", col_names = TRUE, 
+                      col_types = NULL, na = "", skip = 0)
+head(admadrs)
+
+# 删除重复的时间点
+admadrs <- admadrs[!duplicated(admadrs[c("USUBJID", "AVISIT")]), ]
+
+# 将相关列转换为因子
+admadrs$USUBJID <- factor(admadrs$USUBJID)
+admadrs$AVISITN <- factor(admadrs$AVISITN)
+admadrs$ADY <- as.factor(admadrs$ADY)
+admadrs$SITEID <- as.factor(admadrs$SITEID)
+admadrs$TRTSEQA <- as.factor(admadrs$TRTSEQA)
+admadrs$BASE <- as.numeric(admadrs$BASE)
+
+# 将 TRT01A 转换为因子，并重新编码参考水平
+admadrs$TRT01A <- as.factor(admadrs$TRT01A)
+admadrs$TRT01A <- relevel(admadrs$TRT01A, ref = "Dummy A")
+
+#admadrs$AVISITN <- relevel(admadrs$AVISITN, ref = "")
+
+# 对数值型变量进行归一化处理
+
+
+str(admadrs$BASE)
+
+# 拟合模型
+fit <- mmrm(
+  formula = AVAL ~ AVISITN:TRT01A + TRT01A+ SEX + RACE + SITEID  + us(AVISITN | USUBJID),
+  data = admadrs
+)
+
+# 查看模型结果
+model_summary <- summary(fit)
+print(model_summary)
+```
+## middle-aged adults (≥24 to 55 years)分析
+```r
+
+############## 中年成人分析 ##############
+# 读取中年成人数据并拟合模型
+# (假设这里已经完成)
+
+cat("\n### 中年成人组分析 ###\n")
+
+# 重新计算边际均值
+emm_middle <- emmeans(fit, ~ AVISITN | TRT01A)
+print(emm_middle)
+
+# 执行对比分析
+tryCatch({
+  # 对每个治疗组，计算各时间点与基线的对比
+  comparisons_middle <- contrast(emm_middle, method = "revpairwise", by = "TRT01A")
+  cat("\n中年成人组的时间点比较:\n")
+  print(comparisons_middle)
+  
+  # 保存结果
+  results_middle <- as.data.frame(comparisons_middle)
+  results_middle$AgeGroup <- "Middle-Aged Adults (24-55)"
+  
+}, error = function(e) {
+  cat("中年成人组的对比分析出错:", conditionMessage(e), "\n")
+  results_middle <- data.frame()
+})
+
+```
+
+## ≥55 older adults
+```r
+# 加载必要的包
+library(readxl)
+library(mmrm)
+library(ggplot2)
+
+?mmrm
+# 读取数据
+admadrs <- read_excel("/Users/qiujiahui/Desktop/≥55 older adults.xlsx", 
+                      sheet = "Sheet1", col_names = TRUE, 
+                      col_types = NULL, na = "", skip = 0)
+head(admadrs)
+
+# 删除重复的时间点
+admadrs <- admadrs[!duplicated(admadrs[c("USUBJID", "AVISIT")]), ]
+
+# 将相关列转换为因子
+admadrs$USUBJID <- factor(admadrs$USUBJID)
+admadrs$AVISITN <- factor(admadrs$AVISITN)
+admadrs$ADY <- as.factor(admadrs$ADY)
+admadrs$SITEID <- as.factor(admadrs$SITEID)
+admadrs$TRTSEQA <- as.factor(admadrs$TRTSEQA)
+admadrs$BASE <- as.numeric(admadrs$BASE)
+
+# 将 TRT01A 转换为因子，并重新编码参考水平
+admadrs$TRT01A <- as.factor(admadrs$TRT01A)
+admadrs$TRT01A <- relevel(admadrs$TRT01A, ref = "Dummy A")
+
+#admadrs$AVISITN <- relevel(admadrs$AVISITN, ref = "")
+
+# 对数值型变量进行归一化处理
+
+
+str(admadrs$BASE)
+
+# 拟合模型
+fit <- mmrm(
+  formula = AVAL ~ AVISITN:TRT01A + TRT01A+ SEX + RACE + SITEID  + us(AVISITN | USUBJID),
+  data = admadrs
+)
+
+# 查看模型结果
+model_summary <- summary(fit)
+print(model_summary)
+```
+## ≥55 older adults 分析
+```r
+############## 老年成人分析 ##############
+# 读取老年成人数据并拟合模型
+# (假设这里已经完成)
+
+cat("\n### 老年成人组分析 ###\n")
+
+# 重新计算边际均值
+emm_older <- emmeans(fit, ~ AVISITN | TRT01A)
+print(emm_older)
+
+# 执行对比分析
+tryCatch({
+  # 对每个治疗组，计算各时间点与基线的对比
+  comparisons_older <- contrast(emm_older, method = "revpairwise", by = "TRT01A")
+  cat("\n老年成人组的时间点比较:\n")
+  print(comparisons_older)
+  
+  # 保存结果
+  results_older <- as.data.frame(comparisons_older)
+  results_older$AgeGroup <- "Older Adults (55+)"
+  
+}, error = function(e) {
+  cat("老年成人组的对比分析出错:", conditionMessage(e), "\n")
+  results_older <- data.frame()
+})
+```
+## 年龄组疗效
+```r
+############## 比较不同年龄组疗效差异 ##############
+cat("\n### 比较不同年龄组疗效差异 ###\n")
+
+# 在合并数据之前确保AgeGroup标签正确
+results_young$AgeGroup <- "Young Adults (18-24)"
+results_middle$AgeGroup <- "Middle-Aged Adults (24-55)"
+results_older$AgeGroup <- "Older Adults (55+)"
+
+# 合并数据
+combined_results <- rbind(results_young, results_middle, results_older)
+
+# 提取对比信息，并简化时间点标签
+combined_results$TimeComparison <- gsub(" - .*$", "", combined_results$contrast)
+# 使用更简洁的时间点标签，例如T1, T2, T3...
+combined_results$TimePoint <- factor(combined_results$TimeComparison, 
+                                    levels = unique(combined_results$TimeComparison),
+                                    labels = paste0("T", seq_along(unique(combined_results$TimeComparison))))
+
+# 创建改进的交互图
+p <- ggplot(combined_results, aes(x = TimePoint, y = estimate, color = TRT01A, 
+                               group = interaction(TRT01A, AgeGroup), 
+                               linetype = AgeGroup)) +
+  geom_line() +
+  geom_point() +
+  geom_errorbar(aes(ymin = estimate - SE, ymax = estimate + SE), width = 0.2) +
+  facet_wrap(~ TRT01A) +
+  labs(title = "Comparison of Treatment Effects Across Age Groups",
+       subtitle = "Changes compared to baseline",
+       x = "Time Point",
+       y = "Estimated Difference",
+       color = "Treatment Group",
+       linetype = "Age Group") +
+  theme_minimal() +
+  # 改进x轴标签显示
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 8),  # 倾斜标签并减小字体
+    legend.position = "bottom",  # 将图例放在底部
+    legend.box = "vertical"  # 垂直排列图例
+  )
+
+# 打印图表
+print(p)
+
+# 添加时间点说明表格
+time_point_table <- data.frame(
+  TimePointLabel = paste0("T", seq_along(unique(combined_results$TimeComparison))),
+  OriginalTimePoint = unique(combined_results$TimeComparison)
+)
+
+# 打印时间点对照表
+cat("\nTime Point Reference Table:\n")
+print(time_point_table)
+
+# 创建一个函数提取特定对比和治疗组的结果
+get_result <- function(results_df, contrast_pattern, trt) {
+  subset(results_df, grepl(contrast_pattern, contrast) & TRT01A == trt)
+}
+
+# 定义要比较的对比模式（如0 vs 2, 0 vs 8等）
+contrast_patterns <- paste0(baseline_level, " - ", time_points)
+
+# 创建数据框用于年龄组间比较
+# 年轻成人 vs 中年成人
+young_vs_middle_table <- data.frame()
+# 年轻成人 vs 老年成人
+young_vs_older_table <- data.frame()
+# 中年成人 vs 老年成人
+middle_vs_older_table <- data.frame()
+
+for(pattern in contrast_patterns) {
+  for(trt in unique(combined_results$TRT01A)) {
+    # 获取三个年龄组的结果
+    young_result <- get_result(results_young, pattern, trt)
+    middle_result <- get_result(results_middle, pattern, trt)
+    older_result <- get_result(results_older, pattern, trt)
+    
+    # 年轻vs中年
+    if(nrow(young_result) > 0 && nrow(middle_result) > 0) {
+      diff_estimate <- young_result$estimate - middle_result$estimate
+      diff_se <- sqrt(young_result$SE^2 + middle_result$SE^2)
+      z_stat <- diff_estimate / diff_se
+      p_value <- 2 * (1 - pnorm(abs(z_stat)))
+      
+      young_vs_middle_table <- rbind(young_vs_middle_table, data.frame(
+        Contrast = pattern,
+        TRT01A = trt,
+        Young_Est = young_result$estimate,
+        Young_SE = young_result$SE,
+        Middle_Est = middle_result$estimate,
+        Middle_SE = middle_result$SE,
+        Diff_Est = diff_estimate,
+        Diff_SE = diff_se,
+        Z_stat = z_stat,
+        P_value = p_value
+      ))
+    }
+    
+    # 年轻vs老年
+    if(nrow(young_result) > 0 && nrow(older_result) > 0) {
+      diff_estimate <- young_result$estimate - older_result$estimate
+      diff_se <- sqrt(young_result$SE^2 + older_result$SE^2)
+      z_stat <- diff_estimate / diff_se
+      p_value <- 2 * (1 - pnorm(abs(z_stat)))
+      
+      young_vs_older_table <- rbind(young_vs_older_table, data.frame(
+        Contrast = pattern,
+        TRT01A = trt,
+        Young_Est = young_result$estimate,
+        Young_SE = young_result$SE,
+        Older_Est = older_result$estimate,
+        Older_SE = older_result$SE,
+        Diff_Est = diff_estimate,
+        Diff_SE = diff_se,
+        Z_stat = z_stat,
+        P_value = p_value
+      ))
+    }
+    
+    # 中年vs老年
+    if(nrow(middle_result) > 0 && nrow(older_result) > 0) {
+      diff_estimate <- middle_result$estimate - older_result$estimate
+      diff_se <- sqrt(middle_result$SE^2 + older_result$SE^2)
+      z_stat <- diff_estimate / diff_se
+      p_value <- 2 * (1 - pnorm(abs(z_stat)))
+      
+      middle_vs_older_table <- rbind(middle_vs_older_table, data.frame(
+        Contrast = pattern,
+        TRT01A = trt,
+        Middle_Est = middle_result$estimate,
+        Middle_SE = middle_result$SE,
+        Older_Est = older_result$estimate,
+        Older_SE = older_result$SE,
+        Diff_Est = diff_estimate,
+        Diff_SE = diff_se,
+        Z_stat = z_stat,
+        P_value = p_value
+      ))
+    }
+  }
+}
+
+# 输出比较结果
+cat("\n年轻成人 vs. 中年成人组疗效比较:\n")
+if(nrow(young_vs_middle_table) > 0) {
+  print(young_vs_middle_table)
+} else {
+  cat("没有足够数据进行比较\n")
+}
+
+cat("\n年轻成人 vs. 老年成人组疗效比较:\n")
+if(nrow(young_vs_older_table) > 0) {
+  print(young_vs_older_table)
+} else {
+  cat("没有足够数据进行比较\n")
+}
+
+cat("\n中年成人 vs. 老年成人组疗效比较:\n")
+if(nrow(middle_vs_older_table) > 0) {
+  print(middle_vs_older_table)
+} else {
+  cat("没有足够数据进行比较\n")
+}
+
+# 添加显著性标记到图表
+# 创建一个数据框，包含所有显著差异的p值<0.05的结果
+significant_diffs <- rbind(
+  subset(young_vs_middle_table, P_value < 0.05),
+  subset(young_vs_older_table, P_value < 0.05),
+  subset(middle_vs_older_table, P_value < 0.05)
+)
+
+if(nrow(significant_diffs) > 0) {
+  cat("\n显著性差异总结 (p < 0.05):\n")
+  print(significant_diffs)
+}
+```
+```r
+# 创建年龄组显著性热图
+if(nrow(young_vs_middle_table) > 0 && nrow(young_vs_older_table) > 0 && nrow(middle_vs_older_table) > 0) {
+  # 准备热图数据
+  heatmap_data <- NULL
+  
+  # 处理各组间比较的p值
+  for(trt in unique(combined_results$TRT01A)) {
+    for(pattern in contrast_patterns) {
+      # 提取各组比较的p值
+      y_m_row <- subset(young_vs_middle_table, Contrast == pattern & TRT01A == trt)
+      y_o_row <- subset(young_vs_older_table, Contrast == pattern & TRT01A == trt)
+      m_o_row <- subset(middle_vs_older_table, Contrast == pattern & TRT01A == trt)
+      
+      if(nrow(y_m_row) > 0 && nrow(y_o_row) > 0 && nrow(m_o_row) > 0) {
+        new_row <- data.frame(
+          TimePoint = pattern,
+          Treatment = trt,
+          Young_vs_Middle_p = y_m_row$P_value,
+          Young_vs_Older_p = y_o_row$P_value,
+          Middle_vs_Older_p = m_o_row$P_value
+        )
+        heatmap_data <- rbind(heatmap_data, new_row)
+      }
+    }
+  }
+  
+  if(!is.null(heatmap_data)) {
+    # 创建长格式数据用于热图
+    heatmap_long <- tidyr::pivot_longer(
+      heatmap_data, 
+      cols = c(Young_vs_Middle_p, Young_vs_Older_p, Middle_vs_Older_p),
+      names_to = "Comparison", 
+      values_to = "P_Value"
+    )
+    
+    # 生成热图
+    p_heatmap <- ggplot(heatmap_long, aes(x = TimePoint, y = Comparison, fill = -log10(P_Value))) +
+      geom_tile() +
+      scale_fill_gradient(low = "white", high = "red") +
+      facet_wrap(~ Treatment) +
+      labs(
+        title = "Statistical Significance of Age Group Differences",
+        subtitle = "-log10(p-value): higher values = more significant",
+        x = "Time Point", 
+        y = "Group Comparison",
+        fill = "-log10(p)"
+      ) +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    
+    print(p_heatmap)
+  }
+}
+
+# 创建各年龄组在各治疗组的治疗效应折线图
+# 将结果按年龄组和治疗方案分组
+age_group_effects <- ggplot(combined_results, 
+                           aes(x = TimePoint, y = estimate, 
+                               group = AgeGroup, color = AgeGroup)) +
+  geom_line() +
+  geom_point() +
+  geom_errorbar(aes(ymin = estimate - SE, ymax = estimate + SE), width = 0.2) +
+  facet_wrap(~ TRT01A) +
+  labs(title = "Treatment Effects by Age Group",
+       x = "Time Point", 
+       y = "Estimated Effect",
+       color = "Age Group") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+print(age_group_effects)
+
+# 总结分析
+cat("\n## 年龄组治疗效应总结分析\n")
+cat("1. 基于以上分析，我们可以观察到不同年龄组对治疗的反应存在以下差异：\n")
+
+# 检查是否有显著差异
+if(exists("significant_diffs") && nrow(significant_diffs) > 0) {
+  cat("   - 存在显著的年龄组间差异(p < 0.05)，特别是在以下时间点和治疗组：\n")
+  for(i in 1:nrow(significant_diffs)) {
+    row <- significant_diffs[i,]
+    cat(paste0("     * 时间点 ", row$Contrast, "，治疗组 ", row$TRT01A, 
+               " (p = ", round(row$P_value, 4), ")\n"))
+  }
+} else {
+  cat("   - 在分析的时间点和治疗组中未发现显著的年龄组间差异\n")
+}
+
+# 药效学差异总结
+cat("\n2. 药效学差异总结：\n")
+cat("   - young adults (18-24 years)：\n")
+young_effect <- mean(subset(results_young, TRT01A != "Dummy A")$estimate)
+cat(paste0("     Mean therapeutic effect: ", round(young_effect, 2), "\n"))
+
+cat("   - middle-aged adults (24-55 years)：\n")
+middle_effect <- mean(subset(results_middle, TRT01A != "Dummy A")$estimate)
+cat(paste0("     Mean therapeutic effect: ", round(middle_effect, 2), "\n"))
+
+cat("   - older adults (>= 55 years)：\n")
+older_effect <- mean(subset(results_older, TRT01A != "Dummy A")$estimate)
+cat(paste0("     Mean therapeutic effect: ", round(older_effect, 2), "\n"))
+
+# 整体结论
+cat("\n3. 临床意义和建议：\n")
+# 比较三组平均效应
+groups <- c("年轻成人", "中年成人", "老年成人")
+effects <- c(young_effect, middle_effect, older_effect)
+best_group_idx <- which.max(abs(effects))
+lowest_group_idx <- which.min(abs(effects))
+
+cat(paste0("   - ", groups[best_group_idx], "组显示出最强的治疗反应\n"))
+cat(paste0("   - ", groups[lowest_group_idx], "组显示出最弱的治疗反应\n"))
+
+# 最终建议
+cat("\n4. 临床应用建议：\n")
+cat("   - 根据不同年龄组的反应差异，可能需要考虑针对特定年龄组调整治疗方案\n")
+cat("   - 特别关注对治疗反应较弱的年龄组，可能需要增加治疗强度或辅助治疗\n")
+cat("   - 应进一步研究年龄相关的药代动力学和药效学差异，以优化治疗策略\n")
+```
+
+
+
+## 主要疗效分析（Day28）
+
+```{r}
+
+library(emmeans)
+
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(emmeans)
+library(mmrm)
+library(tidyr)
+library(viridis)
+library(grid)
+library(gridExtra)
+
+
+
+
+# 获取Day28的最小二乘均值
+emm_day28 <- emmeans(
+  fit, 
+  specs = ~ TRT01A | AVISITN,
+  at = list(AVISITN = "28") # "28"是AVISITN中Day28对应的水平（减20000后）
+)
+
+# 治疗组与安慰剂对比
+contrast_specs <- list(
+  "Esk56_vs_Placebo" = c(-1, 1, 0),
+  "Esk84_vs_Placebo" = c(-1, 0, 1)
+)
+
+contrast_results <- contrast(
+  emm_day28,
+  method = contrast_specs,
+  adjust = "none"
+) %>% 
+  summary(infer = TRUE) # 包含置信区间和p值
+
+# 显示对比结果
+print(contrast_results)
+```
+
+## 疗效趋势可视化及森林图
+
+```{r}
+
+library(ggplot2)
+# 获取各时间点预测值
+#admadrs$AVISITN <- droplevels(admadrs$AVISITN)
+emm_trend <- emmeans(
+  fit,
+  specs = ~ TRT01A | AVISITN, 
+  at = list(AVISITN = levels(admadrs$AVISITN)),# 使用所有时间点
+  nuisance = "RACE") %>% # 将RACE设为无关因素保证行数不超过10000
+  summary()
+
+# 绘制疗效趋势图
+(p_trend <- ggplot(emm_trend, aes(x = AVISITN, y = emmean, 
+                                 color = TRT01A, group = TRT01A)) +
+  geom_line(linewidth = 1.2) +
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), 
+                width = 0.2, 
+                position = position_dodge(0.1)) +
+  geom_point(size = 3) +
+  scale_color_viridis(discrete = TRUE, 
+                     labels = c("Placebo", "56mg", "84mg")) +
+  labs(
+    title = "Treatment Effect Over Time",
+    x = "Study Visit (Day)", 
+    y = "Adjusted Mean Change from Baseline (LS Means)", 
+    color = "Treatment Group"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "top",
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ))
+
+# 绘制森林图
+contrast_df <- as.data.frame(contrast_results)
+contrast_df$Comparison <- rownames(contrast_df)
+
+(p_forest <- ggplot(contrast_df, 
+                   aes(x = estimate, y = Comparison, 
+                       xmin = lower.CL, xmax = upper.CL)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_errorbarh(height = 0.2) +
+  geom_point(size = 3, color = "#440154") +
+  scale_y_discrete(labels = c("56mg vs Placebo", "84mg vs Placebo")) +
+  labs(
+    title = "Treatment Comparisons at Day 28",
+    x = "Treatment Difference (95% CI)", 
+    y = ""
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    panel.grid.major.y = element_blank()
+  ))
+
+
+# 组合图形
+grid.arrange(p_trend, p_forest, ncol = 1, heights = c(2, 1))
+
+# 保存图形（PDF格式）
+ggsave("treatment_analysis.pdf", 
+       arrangeGrob(p_trend, p_forest, ncol = 1), 
+       width = 10, height = 8)
+
+# 保存统计结果
+write.csv(contrast_results, "treatment_contrasts.csv", row.names = FALSE)
+```
+
+## 治疗组vs安慰剂的估计边际均值和差异计算及可视化
+
+```{r}
+
+# 将Day 28对应的AVISITN水平赋值
+day28_level <- "28" 
+
+# 计算Day 28时的估计边际均值
+em_day28 <- emmeans(fit, ~ TRT01A | AVISITN, at = list(AVISITN = day28_level))
+print(em_day28)
+
+# 计算治疗组vs安慰剂在Day28时的差异
+contrasts_day28 <- contrast(em_day28, method = "trt.vs.ctrl", ref = 1)
+print(contrasts_day28)
+
+# 计算所有时间点的估计边际均值
+em_all <- emmeans(fit, ~ TRT01A | AVISITN, nuisance = "RACE")
+print(em_all)
+
+# 各组在各时间点的均值比较
+contrasts_all <- contrast(em_all, method = "trt.vs.ctrl", ref = 1)
+print(contrasts_all)
+
+# 将结果转换为数据框以便绘图
+em_all_df <- as.data.frame(em_all)
+
+# 创建一个时间轴变量，将AVISITN转换为数值以便绘图
+em_all_df$Time <- as.numeric(as.character(em_all_df$AVISITN))
+
+# 绘制各治疗组随时间的MADRS变化趋势图
+ggplot(em_all_df, aes(x = AVISITN, y = emmean, color = TRT01A, group = TRT01A)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = emmean - SE, ymax = emmean + SE), width = 0.2) +
+  labs(
+    title = "Change from Baseline in MADRS Total Score Over Time",
+    x = "Day",
+    y = "Estimated Mean Change from Baseline",
+    color = "Treatment Group"
+  ) +
+  scale_color_viridis(discrete = TRUE, option = "D", 
+                      labels = c("Placebo", "Esketamine 56 mg", "Esketamine 84 mg")) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    panel.grid.minor = element_blank(),
+    axis.title = element_text(face = "bold"),
+    plot.title = element_text(hjust = 0.5, face = "bold")
+  )
+
+# 保存图片
+ggsave("MADRS_change_over_time.png", width = 10, height = 6, dpi = 300)
+
+# 创建Day 28时的柱状图比较
+day28_df <- subset(em_all_df, AVISITN == day28_level)
+
+# 将各组在各时间点的均值比较结果转换为数据框以便绘图
+contrasts_day28_df <- as.data.frame(contrasts_day28)
+
+# 绘制Day 28时的柱状图
+p1 <- ggplot(day28_df, aes(x = TRT01A, y = emmean, fill = TRT01A)) +
+  geom_bar(stat = "identity", width = 0.7) +
+  geom_errorbar(aes(ymin = emmean - SE, ymax = emmean + SE), width = 0.2) +
+  labs(
+    title = "Change from Baseline in MADRS Total Score at Day 28",
+    x = "Treatment Group",
+    y = "Estimated Mean Change from Baseline",
+    fill = "Treatment Group"
+  ) +
+  scale_fill_viridis(discrete = TRUE, option = "D",
+                    labels = c("Placebo", "Esketamine 56 mg", "Esketamine 84 mg")) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(face = "bold"),
+    plot.title = element_text(hjust = 0.5, face = "bold")
+  )
+
+# 绘制治疗组vs安慰剂的差异图
+p2 <- ggplot(contrasts_day28_df, aes(x = contrast, y = estimate, fill = contrast)) +
+  geom_bar(stat = "identity", width = 0.7) +
+  geom_errorbar(aes(ymin = estimate - SE, ymax = estimate + SE), width = 0.2) +
+  labs(
+    title = "Treatment Effect vs Placebo at Day 28",
+    x = "Contrast",
+    y = "Estimated Difference",
+    fill = "Contrast"
+  ) +
+  scale_fill_viridis(discrete = TRUE, option = "E") +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(face = "bold"),
+    plot.title = element_text(hjust = 0.5, face = "bold")
+  ) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red")
+
+# 将两个图组合在一起
+combined_plot <- grid.arrange(p1, p2, ncol = 2)
+
+# 保存组合图
+ggsave("Day28_treatment_effect.png", combined_plot, width = 12, height = 6, dpi = 300)
+
+# 创建森林图展示各时间点的治疗效果
+contrasts_all_df <- as.data.frame(contrasts_all)
+contrasts_all_df$Time <- as.numeric(as.character(contrasts_all_df$AVISITN))
+
+# 森林图
+ggplot(contrasts_all_df, aes(x = AVISITN , y = estimate, color = contrast)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = estimate - SE*1.96, ymax = estimate + SE*1.96), width = 0.2) +
+  geom_line(aes(group = contrast), linewidth = 1) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  facet_wrap(~ contrast, ncol = 1) +
+  labs(
+    title = "Treatment Effect vs Placebo Over Time",
+    x = "Day",
+    y = "Estimated Difference vs Placebo",
+    color = "Treatment Group"
+  ) +
+  scale_color_viridis(discrete = TRUE, option = "D") +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    strip.background = element_rect(fill = "lightgrey"),
+    strip.text = element_text(face = "bold"),
+    axis.title = element_text(face = "bold"),
+    plot.title = element_text(hjust = 0.5, face = "bold")
+  )
+
+# 保存森林图
+ggsave("Treatment_effect_forest_plot.png", width = 10, height = 8, dpi = 300)
+
+# 创建热图展示p值
+# 提取所有时间点的p值
+p_values <- contrasts_all_df
+p_values$sig <- ifelse(p_values$p.value < 0.001, "***",
+                      ifelse(p_values$p.value < 0.01, "**",
+                            ifelse(p_values$p.value < 0.05, "*", "ns")))
+
+# 处理热图所需数据
+p_values_wide <- p_values %>%
+  select(AVISITN, contrast, p.value) %>%
+  pivot_wider(names_from = contrast, values_from = p.value)
+
+# 绘制p值热图
+p_values_long <- p_values %>%
+  select(Time, contrast, p.value, sig)
+
+ggplot(p_values_long, aes(x = factor(Time), y = contrast, fill = -log10(p.value))) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = sig), color = "white", size = 5) +
+  scale_fill_viridis(option = "C", name = "-log10(p-value)") +
+  labs(
+    title = "Statistical Significance of Treatment Effect vs Placebo",
+    x = "Day",
+    y = "Treatment Group",
+    caption = "* p<0.05, ** p<0.01, *** p<0.001, ns: not significant"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title = element_text(face = "bold"),
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    legend.position = "right"
+  )
+
+# 保存热图
+ggsave("Treatment_significance_heatmap.png", width = 10, height = 6, dpi = 300)
+
+# 模型诊断图
+# 提取残差
+residuals <- residuals(fit)
+fitted_values <- fitted(fit)
+
+# 创建诊断数据框
+diag_df <- data.frame(
+  Fitted = fitted_values,
+  Residuals = residuals
+)
+
+# 绘制残差图
+p3 <- ggplot(diag_df, aes(x = Fitted, y = Residuals)) +
+  geom_point(alpha = 0.5) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  geom_smooth(method = "loess", se = FALSE, color = "blue") +
+  labs(
+    title = "Residuals vs Fitted Values",
+    x = "Fitted Values",
+    y = "Residuals"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title = element_text(face = "bold"),
+    plot.title = element_text(hjust = 0.5, face = "bold")
+  )
+
+# 绘制残差的QQ图
+p4 <- ggplot(diag_df, aes(sample = Residuals)) +
+  stat_qq() +
+  stat_qq_line() +
+  labs(
+    title = "Normal Q-Q Plot of Residuals",
+    x = "Theoretical Quantiles",
+    y = "Sample Quantiles"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title = element_text(face = "bold"),
+    plot.title = element_text(hjust = 0.5, face = "bold")
+  )
+
+# 组合诊断图
+diag_plot <- grid.arrange(p3, p4, ncol = 2)
+
+# 保存诊断图
+ggsave("Model_diagnostics.png", diag_plot, width = 12, height = 6, dpi = 300)
+
+```
+
+## 数据可视化（有图例和解释）
+
+```{r}
+
+# 各治疗组随时间的MADRS变化趋势图
+
+# 输出emmeans结果数据
+em_all_df
+
+# 绘图
+ggplot(em_all_df, aes(x = AVISITN, y = emmean, color = TRT01A, group = TRT01A)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = emmean - SE, ymax = emmean + SE), width = 0.2) +
+  labs(
+    title = "Change from Baseline in MADRS Total Score Over Time",
+    subtitle = "Mixed Model for Repeated Measures (MMRM) Analysis",
+    x = "Study Day",
+    y = "Estimated Mean Change from Baseline",
+    color = "Treatment Group",
+    caption = "Note: Error bars represent standard errors. Negative values indicate improvement in depressive symptoms."
+  ) +
+  scale_color_viridis(discrete = TRUE, option = "D", 
+                      labels = c("Placebo", "Esketamine 56 mg", "Esketamine 84 mg")) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    legend.background = element_rect(fill = "white", color = "grey80"),
+    legend.title = element_text(face = "bold"),
+    panel.grid.minor = element_blank(),
+    axis.title = element_text(face = "bold"),
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5),
+    plot.caption = element_text(hjust = 0, face = "italic")
+  ) +
+  # 添加解释文本
+  annotate("text", x = min(as.numeric(as.character(em_all_df$AVISITN))) + 2, 
+           y = min(em_all_df$emmean) * 0.8, 
+           label = "Lower values indicate greater\nimprovement in depression", 
+           hjust = 0, size = 3.5, fontface = "italic")
+
+# 保存图片
+ggsave("MADRS_change_over_time_with_legend.png", width = 10, height = 6, dpi = 300)
+
+
+# 输出Day 28时的估计边际均值
+day28_df
+
+# Day 28时的柱状图
+p1 <- ggplot(day28_df, aes(x = TRT01A, y = emmean, fill = TRT01A)) +
+  geom_bar(stat = "identity", width = 0.7, color = "black") +
+  geom_errorbar(aes(ymin = emmean - SE, ymax = emmean + SE), width = 0.2) +
+  labs(
+    title = "Change from Baseline in MADRS Total Score at Day 28",
+    subtitle = "Estimated Marginal Means with Standard Errors",
+    x = "Treatment Group",
+    y = "Estimated Mean Change from Baseline",
+    fill = "Treatment Group",
+    caption = "Note: Error bars represent standard errors. Negative values indicate improvement in depressive symptoms."
+  ) +
+  scale_fill_viridis(discrete = TRUE, option = "D",
+                    labels = c("Placebo", "Esketamine 56 mg", "Esketamine 84 mg")) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    legend.background = element_rect(fill = "white", color = "grey80"),
+    legend.title = element_text(face = "bold"),
+    axis.title = element_text(face = "bold"),
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5),
+    plot.caption = element_text(hjust = 0, face = "italic"),
+    axis.text.x = element_text(angle = 0, hjust = 0.5)
+  ) +
+  # 添加标签
+  geom_text(aes(label = sprintf("%.1f", emmean)), position = position_dodge(width = 0.7), 
+            vjust = -0.5, color = "black", fontface = "bold")
+
+
+# 输出绘图数据
+contrasts_day28_df
+
+# 绘制治疗组vs安慰剂的差异图
+p2 <- ggplot(contrasts_day28_df, aes(x = contrast, y = estimate, fill = contrast)) +
+  geom_bar(stat = "identity", width = 0.7, color = "black") +
+  geom_errorbar(aes(ymin = estimate - SE, ymax = estimate + SE), width = 0.2) +
+  labs(
+    title = "Treatment Effect vs Placebo at Day 28",
+    subtitle = "Difference in Estimated Means with Standard Errors",
+    x = "Treatment Comparison",
+    y = "Estimated Difference vs Placebo",
+    fill = "Treatment Comparison",
+    caption = "Note: Values below zero favor active treatment over placebo.\nRed dashed line represents no difference from placebo."
+  ) +
+  scale_fill_viridis(discrete = TRUE, option = "E",
+                    labels = c("Esketamine 56 mg vs Placebo", "Esketamine 84 mg vs Placebo")) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    legend.background = element_rect(fill = "white", color = "grey80"),
+    legend.title = element_text(face = "bold"),
+    axis.title = element_text(face = "bold"),
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5),
+    plot.caption = element_text(hjust = 0, face = "italic"),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  # 添加p值和效应量标签
+  geom_text(aes(label = sprintf("Diff: %.1f\np = %.3f", estimate, p.value)), 
+            position = position_dodge(width = 0.7), vjust = -0.8, size = 3.5)
+
+# 使用patchwork组合两个图
+library(patchwork)
+combined_plot <- p1 + p2 + plot_layout(ncol = 2)
+combined_plot <- combined_plot + plot_annotation(
+  title = "MADRS Score Change and Treatment Effect at Day 28",
+  theme = theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 16))
+)
+
+# 保存组合图
+ggsave("Day28_treatment_effect_with_legend.png", combined_plot, width = 12, height = 6, dpi = 300)
+
+# 输出绘图数据
+contrasts_all_df
+
+# 创建森林图展示各时间点的治疗效果
+ggplot(contrasts_all_df, aes(x = AVISITN, y = estimate, color = contrast)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = estimate - SE*1.96, ymax = estimate + SE*1.96), width = 0.2) +
+  geom_line(aes(group = contrast), linewidth = 1) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  facet_wrap(~ contrast, ncol = 1) +
+  labs(
+    title = "Treatment Effect vs Placebo Over Time",
+    subtitle = "Estimated Differences with 95% Confidence Intervals",
+    x = "Study Day",
+    y = "Estimated Difference vs Placebo",
+    color = "Treatment Comparison",
+    caption = paste("Note: Points below zero favor active treatment over placebo.",
+                   "Error bars represent 95% confidence intervals.",
+                   "Non-overlapping confidence intervals with red dashed line (zero) indicate statistical significance.")
+  ) +
+  scale_color_viridis(discrete = TRUE, option = "D",
+                     labels = c("Esketamine 56 mg vs Placebo", "Esketamine 84 mg vs Placebo")) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    legend.background = element_rect(fill = "white", color = "grey80"),
+    legend.title = element_text(face = "bold"),
+    strip.background = element_rect(fill = "lightgrey"),
+    strip.text = element_text(face = "bold"),
+    axis.title = element_text(face = "bold"),
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5),
+    plot.caption = element_text(hjust = 0, face = "italic")
+  ) +
+  # 添加p值标签
+  geom_text(aes(label = sprintf("p = %.3f", p.value)), 
+            position = position_dodge(width = 0.5), vjust = -0.8, 
+            color = "black", size = 3)
+
+# 保存森林图
+ggsave("Treatment_effect_forest_plot_with_legend.png", width = 10, height = 8, dpi = 300)
+
+
+
+
+# 创建热图展示p值
+# 提取所有时间点的p值
+p_values <- contrasts_all_df
+p_values$sig <- ifelse(p_values$p.value < 0.001, "***",
+                     ifelse(p_values$p.value < 0.01, "**",
+                          ifelse(p_values$p.value < 0.05, "*", "ns")))
+
+# 数据准备
+p_values_long <- p_values %>%
+  select(Time, contrast, p.value, sig)
+
+# 添加-log10(p值)列
+p_values_long$neg_log10_p <- -log10(p_values_long$p.value)
+
+p_values_long
+
+# 绘制p值热图
+ggplot(p_values_long, aes(x = factor(Time), y = contrast, fill =  -log10(p.value))) +
+  geom_tile(color = "white") +
+  # 根据显著性调整文本颜色
+  geom_text(aes(label = sig, color = ifelse(p.value < 0.05, "white", "black")), size = 5) +
+  # 手动设置文本颜色
+  scale_color_identity() +
+  # 设置小p值(高-log10(p值))为深色
+  scale_fill_viridis(option = "C", name = "-log10(p-value)", direction = 1) +
+  labs(
+    title = "Statistical Significance of Treatment Effect vs Placebo",
+    subtitle = "p-values Transformed to -log10 Scale for Visual Clarity",
+    x = "Study Day",
+    y = "Treatment Comparison",
+    caption = paste("* p<0.05, ** p<0.01, *** p<0.001, ns: not significant",
+                   "Darker colors represent smaller p-values (higher statistical significance)",
+                   "The -log10 transformation converts p=0.05 to 1.3, p=0.01 to 2, p=0.001 to 3, etc.", sep = "\n")
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title = element_text(face = "bold"),
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5),
+    plot.caption = element_text(hjust = 0, face = "italic"),
+    legend.position = "right",
+    legend.title = element_text(face = "bold"),
+    legend.background = element_rect(fill = "white", color = "grey80")
+  )
+
+# 保存热图
+ggsave("Treatment_significance_heatmap_with_legend.png", width = 10, height = 6, dpi = 300)
+
+
+
+# 创建模型诊断图
+# 提取残差
+residuals <- residuals(fit)
+fitted_values <- fitted(fit)
+
+# 创建诊断数据框
+diag_df <- data.frame(
+  Fitted = fitted_values,
+  Residuals = residuals
+)
+
+
+# 为QQ图准备数据
+qq_data <- qqnorm(residuals, plot.it = FALSE)
+qq_df <- data.frame(Theoretical = qq_data$x, Sample = qq_data$y)
+
+
+# 绘制残差图
+p3 <- ggplot(diag_df, aes(x = Fitted, y = Residuals)) +
+  geom_point(alpha = 0.5, color = "blue") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  geom_smooth(method = "loess", se = TRUE, color = "red", fill = "pink", alpha = 0.3) +
+  labs(
+    title = "Residuals vs Fitted Values",
+    subtitle = "Assessment of Homoscedasticity and Linearity",
+    x = "Fitted Values",
+    y = "Residuals",
+    caption = "Note: Points should be randomly scattered around zero line (red dashed line).\nThe smooth curve (red) should be approximately horizontal."
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title = element_text(face = "bold"),
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5),
+    plot.caption = element_text(hjust = 0, face = "italic")
+  ) +
+  # 添加解释性文本
+  annotate("text", x = min(fitted_values) + 0.1*(max(fitted_values)-min(fitted_values)), 
+           y = max(residuals)*0.8, 
+           label = "Ideal pattern: Random scatter\naround the zero line with no pattern", 
+           hjust = 0, size = 3.5, fontface = "italic")
+
+
+
+# 绘制残差的QQ图
+p4 <- ggplot(qq_df, aes(x = Theoretical, y = Sample)) +
+  geom_point(alpha = 0.5, color = "blue") + 
+  geom_abline(intercept = 0, slope = 10, color = "red") +
+  labs(
+    title = "Normal Q-Q Plot of Residuals",
+    subtitle = "Assessment of Normality Assumption",
+    x = "Theoretical Quantiles",
+    y = "Sample Quantiles",
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title = element_text(face = "bold"),
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5),
+    plot.caption = element_text(hjust = 0, face = "italic")
+  ) 
+
+# 使用patchwork组合诊断图
+library(patchwork)
+diag_plot <- p3 + p4 + plot_layout(ncol = 2)
+diag_plot <- diag_plot + plot_annotation(
+  title = "MMRM Model Diagnostic Plots",
+  subtitle = "Assessing Model Assumptions for Valid Statistical Inference",
+  caption = "These diagnostic plots help validate the assumptions of the Mixed Model for Repeated Measures (MMRM) analysis.",
+  theme = theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+               plot.subtitle = element_text(hjust = 0.5),
+               plot.caption = element_text(hjust = 0, face = "italic"))
+)
+
+diag_plot
+
+
+
+```

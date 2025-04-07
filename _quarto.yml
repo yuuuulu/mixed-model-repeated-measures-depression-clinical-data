@@ -1,0 +1,31 @@
+project:
+  type: website
+  output-dir: docs
+  
+website: 
+  title: "2025 XJTLU Biomedical Competition"
+  navbar:
+    left:
+      - href: mainCode.qmd
+        text: MainCodes
+      - href: 亚组2.html
+        text: Subgroups
+      - href: index.qmd
+        text: Homepage
+     
+      #- href: eng pde.qmd
+        #text: PDE  
+
+
+      
+      #- href: sequence.qmd
+       # text: sequence
+      #- href: Lagrange.qmd
+       # text: lasso and Lagrange method
+      #- href: understand directional derivative deeply.qmd
+        #text: Directional Derivative
+      
+format: 
+  html: 
+    theme: cosmo
+    toc: true
