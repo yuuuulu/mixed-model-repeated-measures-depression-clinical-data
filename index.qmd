@@ -6,8 +6,21 @@ editor: visual
 
 # Acknowledgements
 
-We extend our heartfelt thanks to Dr. Mu He for his invaluable guidance and for
-facilitating our communication with the Tigermed team. His support has been instrumental in providing us
-with the opportunity to learn and engage in meaningful discussions. Additionally, we are deeply appreciative
-of the consistent and well-processed data provided by Tigermed, which has been crucial for our analysis
-Besides, thanks to our hard work and enthusiasm about biomedical statistics
+We extend our heartfelt thanks to Dr. Mu He for his invaluable guidance and for facilitating our communication with the Tigermed team. His support has been instrumental in providing us with the opportunity to learn and engage in meaningful discussions. Additionally, we are deeply appreciative of the consistent and well-processed data provided by Tigermed, which has been crucial for our analysis Besides, thanks to our hard work and enthusiasm about biomedical statistics
+
+
+
+# workflow
+
+![](images/clipboard-2923224470.png)
+
+Main model : MMRM (Mixed Model for Repeated Measures)
+
+Evaluations: 
+
+AIC BIC -- for comparison and variable selection in the model
+
+Use emmeans to get the estimated marginal means (lsmeans) and the pairwise comparisons
+
+
+

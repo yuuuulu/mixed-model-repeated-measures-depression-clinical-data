@@ -4,6 +4,38 @@ format: html
 editor: visual
 ---
 
+# intro
+
+## basic idea
+
+Repeated measurements are taken on the same individuals over time.
+
+
+The primary objective of most longitudinal studies is to characterize changes in a particular outcome variable of interest over time. However, we are not only interested in change itself but also in the factors that may influence this change. These factors could be treatment interventions, such as dummy variables abc, and we want to know whether the treatment has an effect on change over time. Does the intervention lead to greater improvements in the outcome over time? It could also be exposures like sex.
+
+
+There are two aspects of the data that complicate the analysis, meaning that we cannot use many of the routine regression techniques we are already familiar with. The first is that if you take repeated measurements over time, those measurements will be correlated and are usually positively correlated. For example, if my systolic blood pressure is high today, it provides more information about future measurements. The second is that when you take repeated measurements over time, the variability of those measurements is often heterogeneous over time. This means that the variability of the outcome at the start of the longitudinal study can often be different from the variability of the outcome later on.
+
+
+Both correlation and variability play important roles in this model, and therefore covariance matrix is particularly significant.
+
+
+Introduce occasions or time, which are not the same.
+
+
+This study period is short, just 28 days, which is quicker when computing the unstructure matrix
+
+
+The data is balanced, meaning that each individual has been measured at the same occasions.
+
+
+
+## further improvement
+
+
+The mixed model can be more flexible for smoothing and semi-parametric regression.
+
+
 # compareGroups
 
 ```{r}
@@ -12,7 +44,7 @@ library(dplyr)
 library(dplyr)
 library(compareGroups)
 library(readxl)
-data0 <- read_excel("/Users/luyu/Desktop/3.xlsx")
+data0 <- read_excel("3.xlsx")
 
 # 将SITEID转换为数值型变量
 data0 <- data0 %>%
@@ -64,7 +96,7 @@ summary(table1)
 ```{r}
 library(dplyr)
 library(compareGroups)
-data0 <- read_excel("/Users/luyu/Desktop/3.xlsx")
+data0 <- read_excel("3.xlsx")
 
 data0$madrsc <- ifelse(data0$BASE > 40, "MADRS SCORE ≥ 40"," MADRS SCORE < 40")
 
@@ -91,6 +123,83 @@ table1
 summary(table1)
 ```
 
+# +++++see mean
+
+```{r}
+# Load required libraries
+library(readxl)  # For reading Excel files
+library(dplyr)   # For data manipulation
+library(tidyr)   # For data manipulation
+
+# Read the data from the Excel file
+data <- read_excel("3.xlsx")
+
+# Convert AVISIT to a numeric factor to sort by the day of the visit
+data$AVISIT <- factor(data$AVISIT, levels = unique(data$AVISIT)[order(as.numeric(gsub("Day \\d+ \\(", "", gsub(" \\(DB\\)", "", data$AVISIT)) ))])
+
+# Group by AVISIT and TRT01A, then calculate mean of AVAL for each group
+result <- data %>%
+  group_by(AVISIT, TRT01A) %>%
+  summarise(mean_AVAL = mean(AVAL, na.rm = TRUE)) %>%
+  ungroup() %>%  # Remove grouping to allow sorting
+  arrange(AVISIT) %>%  # Sort by AVISIT (now a numeric factor)
+  pivot_wider(names_from = TRT01A, values_from = mean_AVAL)  # Pivot the table
+
+# Display the result
+print(result)
+
+
+#data$mean_AVAL <- mean(data$AVAL, na.rm = TRUE)
+
+
+# ggplot2 for visualization --3 lines in a plot and y-axis is AVAL, x-axis is AVISIT
+library(ggplot2)
+#ggplot(data$mean_AVAL ,aes(x = AVISIT)) +
+ # geom_line(aes(y = `Dummy A`, color = "Dummy A")) +
+  #geom_line(aes(y = `Dummy B`, color = "Dummy B")) +
+  #geom_line(aes(y = `Dummy C`, color = "Dummy C")) +
+  #labs(title = "Mean AVAL by AVISIT and Treatment Group",
+    #   x = "Visit",
+     #  y = "Mean AVAL") +
+#  theme_minimal() +
+  #s#cale_color_manual(values = c("blue", "red", "green")) +
+  #theme(legend.title = element_blank())
+# Load required libraries
+
+
+# For plotting, keep the data in long format
+plot_data <- data %>%
+  group_by(AVISIT, TRT01A) %>%
+  summarise(mean_AVAL = mean(AVAL, na.rm = TRUE), .groups = "drop")
+
+# Create the plot
+ggplot(plot_data, aes(x = AVISIT, y = mean_AVAL, color = TRT01A, group = TRT01A)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Mean AVAL by AVISIT and Treatment Group",
+       x = "Visit",
+       y = "Mean AVAL") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_color_manual(values = c("blue", "red", "green"))
+
+
+
+# Optionally, you can write the result to a new Excel file
+# library(writexl)
+# write_xlsx(result, "result.xlsx")
+
+
+
+
+
+
+
+
+
+```
+
+
 # main result
 
 ```{r}
@@ -101,7 +210,7 @@ library(ggplot2)
 library(dplyr)
 
 
-admadrs <- read_excel("/Users/luyu/Desktop/3.xlsx", 
+admadrs <- read_excel("3.xlsx", 
                       sheet = "Sheet1", col_names = TRUE, 
                       col_types = NULL, na = "", skip = 0)
 # 创建分类变量 base_situation
@@ -197,7 +306,7 @@ library(ggplot2)
 library(dplyr)
 
 
-admadrs <- read_excel("/Users/luyu/Desktop/3.xlsx", 
+admadrs <- read_excel("3.xlsx", 
                       sheet = "Sheet1", col_names = TRUE, 
                       col_types = NULL, na = "", skip = 0)
 # 创建分类变量 base_situation

@@ -13,8 +13,8 @@ website:
       - href: index.qmd
         text: Homepage
      
-      #- href: eng pde.qmd
-        #text: PDE  
+      - href: BioStatComp-Tigermed.pdf
+        text: essay 
 
 
       
