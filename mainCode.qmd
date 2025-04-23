@@ -4,37 +4,32 @@ format: html
 editor: visual
 ---
 
+# package explanation for the unstructured matrix
+
+https://openpharma.github.io/mmrm/main/articles/algorithm.html
+
+
 # intro
 
 ## basic idea
 
 Repeated measurements are taken on the same individuals over time.
 
-
 The primary objective of most longitudinal studies is to characterize changes in a particular outcome variable of interest over time. However, we are not only interested in change itself but also in the factors that may influence this change. These factors could be treatment interventions, such as dummy variables abc, and we want to know whether the treatment has an effect on change over time. Does the intervention lead to greater improvements in the outcome over time? It could also be exposures like sex.
-
 
 There are two aspects of the data that complicate the analysis, meaning that we cannot use many of the routine regression techniques we are already familiar with. The first is that if you take repeated measurements over time, those measurements will be correlated and are usually positively correlated. For example, if my systolic blood pressure is high today, it provides more information about future measurements. The second is that when you take repeated measurements over time, the variability of those measurements is often heterogeneous over time. This means that the variability of the outcome at the start of the longitudinal study can often be different from the variability of the outcome later on.
 
-
 Both correlation and variability play important roles in this model, and therefore covariance matrix is particularly significant.
-
 
 Introduce occasions or time, which are not the same.
 
-
 This study period is short, just 28 days, which is quicker when computing the unstructure matrix
-
 
 The data is balanced, meaning that each individual has been measured at the same occasions.
 
-
-
 ## further improvement
 
-
 The mixed model can be more flexible for smoothing and semi-parametric regression.
-
 
 # compareGroups
 
@@ -199,7 +194,6 @@ ggplot(plot_data, aes(x = AVISIT, y = mean_AVAL, color = TRT01A, group = TRT01A)
 
 ```
 
-
 # main result
 
 ```{r}
@@ -252,6 +246,356 @@ fit <- mmrm(
 model_summary <- summary(fit)
 
 model_summary
+
+
+
+```
+
+```{r}
+library(readxl)
+library(mmrm)
+library(ggplot2)
+library(dplyr)
+
+
+admadrs <- read_excel("3.xlsx", 
+                      sheet = "Sheet1", col_names = TRUE, 
+                      col_types = NULL, na = "", skip = 0)
+# 创建分类变量 base_situation
+admadrs$base_situation <- cut(
+  admadrs$BASE,
+  breaks = c( 9, 19, 39, Inf),
+  labels = c("10-19", "20-39", "40+"),
+
+)
+
+
+
+# 将 base_situation 转换为因子类型
+admadrs$base_situation <- as.factor(admadrs$base_situation)
+
+admadrs$USUBJID <- factor(admadrs$USUBJID)
+admadrs$AVISITN <- admadrs$AVISITN - 20000
+admadrs$AVISITN <- factor(admadrs$AVISITN)
+admadrs$CHG <- as.numeric(admadrs$CHG)
+
+admadrs$base_situation <- relevel(admadrs$base_situation, ref = "40+")
+
+# Delete a duplicate point in time
+admadrs <- admadrs[!duplicated(admadrs[c("USUBJID", "AVISIT")]), ]
+
+# scale data 
+admadrs$AGE <- scale(admadrs$AGE)
+admadrs$AVAL <- scale(admadrs$AVAL)
+
+
+
+
+# 更新模型以包括 base_situation
+fit <- mmrm(
+  formula = AVAL ~ AVISITN:TRT01A +TRT01A + SITEID+ RACE + AGE + base_situation + us(AVISITN | USUBJID),
+  data = admadrs)
+
+# 获取模型摘要
+model_summary <- summary(fit)
+
+model_summary
+
+```
+# why subgroups
+
+```{r}
+
+library(readxl)
+library(mmrm)
+library(ggplot2)
+library(dplyr)
+
+
+admadrs <- read_excel("3.xlsx", 
+                      sheet = "Sheet1", col_names = TRUE, 
+                      col_types = NULL, na = "", skip = 0)
+# 创建分类变量 base_situation
+admadrs$base_situation <- cut(
+  admadrs$BASE,
+  breaks = c( 9, 19, 39, Inf),
+  labels = c("10-19", "20-39", "40+"),
+
+)
+
+
+
+# 将 base_situation 转换为因子类型
+admadrs$base_situation <- as.factor(admadrs$base_situation)
+
+admadrs$USUBJID <- factor(admadrs$USUBJID)
+admadrs$AVISITN <- admadrs$AVISITN - 20000
+admadrs$AVISITN <- factor(admadrs$AVISITN)
+admadrs$CHG <- as.numeric(admadrs$CHG)
+
+admadrs$base_situation <- relevel(admadrs$base_situation, ref = "40+")
+
+# Delete a duplicate point in time
+admadrs <- admadrs[!duplicated(admadrs[c("USUBJID", "AVISIT")]), ]
+
+# scale data 
+admadrs$AGE <- scale(admadrs$AGE)
+admadrs$AVAL <- scale(admadrs$AVAL)
+
+
+
+
+# 更新模型以包括 base_situation
+fit <- mmrm(
+  formula = AVAL ~ SEX:TRT01A +TRT01A + SITEID+ RACE + AGE + base_situation + us(AVISITN | USUBJID),
+  data = admadrs)
+
+# 获取模型摘要
+model_summary <- summary(fit)
+
+model_summary
+
+
+```
+
+
+
+# still can not write a good cv code---in fact, just can not run out..
+
+``` r
+library(readxl)
+library(mmrm)
+library(ggplot2)
+library(dplyr)
+library(caret)  # For cross-validation functions
+
+# Your existing code for data preparation
+admadrs <- read_excel("3.xlsx", 
+                      sheet = "Sheet1", col_names = TRUE, 
+                      col_types = NULL, na = "", skip = 0)
+
+# Data preprocessing as in your original code
+admadrs$base_situation <- cut(
+  admadrs$BASE,
+  breaks = c(9, 19, 39, Inf),
+  labels = c("10-19", "20-39", "40+")
+)
+
+admadrs$base_situation <- as.factor(admadrs$base_situation)
+admadrs$USUBJID <- factor(admadrs$USUBJID)
+admadrs$AVISITN <- admadrs$AVISITN - 20000
+admadrs$AVISITN <- factor(admadrs$AVISITN)
+admadrs$CHG <- as.numeric(admadrs$CHG)
+admadrs$base_situation <- relevel(admadrs$base_situation, ref = "40+")
+
+# Delete duplicate points in time
+admadrs <- admadrs[!duplicated(admadrs[c("USUBJID", "AVISIT")]), ]
+
+# Scale data 
+admadrs$AGE <- scale(admadrs$AGE)
+admadrs$AVAL <- scale(admadrs$AVAL)
+
+# Original model
+fit <- mmrm(
+  formula = AVAL ~ AVISITN:TRT01A + TRT01A + SITEID + RACE + AGE + base_situation + us(AVISITN | USUBJID),
+  data = admadrs)
+
+# Get model summary
+model_summary <- summary(fit)
+print(model_summary)
+
+# Add cross-validation
+# We'll use k-fold cross-validation
+set.seed(123)  # For reproducibility
+
+# Function to perform MMRM on training data and evaluate on test data
+cv_mmrm <- function(train_indices, data) {
+  # Training data
+  train_data <- data[train_indices, ]
+  # Test data
+  test_data <- data[-train_indices, ]
+  
+  # Fit model on training data
+  tryCatch({
+    model <- mmrm(
+      formula = AVAL ~ AVISITN:TRT01A + TRT01A + SITEID + RACE + AGE + base_situation + us(AVISITN | USUBJID),
+      data = train_data)
+    
+    # Predict on test data
+    # Note: mmrm doesn't have a standard predict method, so we'll use fitted values
+    # This is an approximation for cross-validation purposes
+    
+    # Get fitted values from the model
+    fitted_vals <- fitted(model)
+    
+    # Create a mapping to match test data with appropriate fitted values
+    # This is a simplified approach
+    test_data$pred <- NA
+    for(i in 1:nrow(test_data)) {
+      # Find matching subject/visit in training data
+      match_idx <- which(
+        train_data$AVISITN == test_data$AVISITN[i] &
+        train_data$TRT01A == test_data$TRT01A[i] &
+        train_data$SITEID == test_data$SITEID[i] &
+        train_data$RACE == test_data$RACE[i] &
+        abs(train_data$AGE - test_data$AGE[i]) < 5 &  # Approximate age match
+        train_data$base_situation == test_data$base_situation[i]
+      )
+      
+      if(length(match_idx) > 0) {
+        # If we find matches, use the average of their fitted values
+        test_data$pred[i] <- mean(fitted_vals[match_idx])
+      } else {
+        # If no exact match, use a more relaxed matching approach
+        match_idx <- which(
+          train_data$AVISITN == test_data$AVISITN[i] &
+          train_data$TRT01A == test_data$TRT01A[i]
+        )
+        
+        if(length(match_idx) > 0) {
+          test_data$pred[i] <- mean(fitted_vals[match_idx])
+        } else {
+          # If still no match, use the overall mean
+          test_data$pred[i] <- mean(fitted_vals)
+        }
+      }
+    }
+    
+    # Calculate MSE
+    mse <- mean((test_data$AVAL - test_data$pred)^2, na.rm = TRUE)
+    
+    return(mse)
+  }, error = function(e) {
+    # Return a large error value if the model fails
+    warning("Model fitting failed: ", e$message)
+    return(Inf)
+  })
+}
+
+cv_mmrm(5, admadrs)
+```
+
+# ????
+
+``` r
+library(readxl)
+library(mmrm)
+library(ggplot2)
+library(dplyr)
+library(lme4)
+library(nlme)
+library(car)
+library(emmeans) # 用于后续比较
+
+# 读取数据
+admadrs <- read_excel("3.xlsx", 
+                     sheet = "Sheet1", col_names = TRUE, 
+                     col_types = NULL, na = "", skip = 0)
+
+# 创建基线分类变量
+admadrs$base_situation <- cut(
+  admadrs$BASE,
+  breaks = c(9, 19, 39, Inf),
+  labels = c("10-19", "20-39", "40+")
+)
+
+# 转换变量为适当的类型
+admadrs$base_situation <- as.factor(admadrs$base_situation)
+admadrs$base_situation <- relevel(admadrs$base_situation, ref = "40+")
+admadrs$USUBJID <- factor(admadrs$USUBJID)
+admadrs$AVISITN <- admadrs$AVISITN - 20000
+admadrs$AVISITN <- factor(admadrs$AVISITN)
+admadrs$CHG <- as.numeric(admadrs$CHG)
+admadrs$TRT01A <- factor(admadrs$TRT01A)  # 确保治疗变量是因子类型
+
+# 删除重复的时间点
+admadrs <- admadrs[!duplicated(admadrs[c("USUBJID", "AVISIT")]), ]
+
+# 缩放连续变量
+admadrs$AGE <- scale(admadrs$AGE)
+admadrs$AVAL <- scale(admadrs$AVAL)
+
+# 1. 标准MMRM模型
+fit <- mmrm(
+  formula = AVAL ~ AVISITN:TRT01A + TRT01A + SITEID + RACE + AGE + base_situation + us(AVISITN | USUBJID),
+  data = admadrs
+)
+
+# 获取模型摘要
+model_summary <- summary(fit)
+print(model_summary)
+
+
+
+# 计算治疗组在各时间点的估计边际均值
+emm <- emmeans(
+  fit,
+  specs = ~ TRT01A | AVISITN, 
+  at = list(AVISITN = levels(admadrs$AVISITN)),# 使用所有时间点
+  nuisance = "RACE") # 将RACE设为无关因素保证行数不超过10000
+print(emm)
+
+# 比较各治疗组与安慰剂的差异
+contrasts <- contrast(emm, method = "trt.vs.ctrl", ref = "Dummy A")
+print(contrasts)
+
+# 2. 个体方差分析
+subject_variance <- admadrs %>%
+  group_by(USUBJID) %>%
+  summarize(
+    variance = var(AVAL, na.rm = TRUE),
+    n_obs = n(),
+    treatment = first(TRT01A)
+  ) %>%
+  filter(n_obs >= 3) # 确保有足够的观测值以获得可靠的方差估计
+
+# 可视化不同治疗组的方差分布
+p1 <- ggplot(subject_variance, aes(x = treatment, y = variance)) +
+  geom_boxplot() +
+  geom_jitter(width = 0.2, alpha = 0.5) +
+  labs(title = "The individual variance distribution of each treatment group",
+       x = "Treatment Group", y = "Intra-individual variance")
+print(p1)
+
+# 检验治疗组之间的方差差异
+variance_model <- lm(variance ~ treatment, data = subject_variance)
+variance_anova <- anova(variance_model)
+print(variance_anova)
+
+# 识别高方差个体（例如，前25%）
+high_var_threshold <- quantile(subject_variance$variance, 0.75, na.rm = TRUE)
+high_var_subjects <- subject_variance %>%
+  filter(variance >= high_var_threshold) %>%
+  arrange(desc(variance))
+print(high_var_subjects)
+
+# 3. 考虑异质方差的混合模���
+var_by_trt_model <- lme(AVAL ~ AVISITN + TRT01A + AVISITN:TRT01A + SITEID + RACE + AGE + base_situation,
+                       random = ~1|USUBJID,
+                       weights = varIdent(form = ~1|TRT01A),
+                       data = admadrs)
+var_model_summary <- summary(var_by_trt_model)
+print(var_model_summary)
+
+# 4. 移除高方差个体后的MMRM模型
+low_var_subjects <- subject_variance %>%
+  filter(variance < high_var_threshold) %>%
+  pull(USUBJID)
+
+admadrs_filtered <- admadrs %>%
+  filter(USUBJID %in% low_var_subjects)
+
+fit_filtered <- mmrm(
+  formula = AVAL ~ AVISITN:TRT01A + TRT01A + SITEID + RACE + AGE + base_situation + us(AVISITN | USUBJID),
+  data = admadrs_filtered
+)
+
+model_summary_filtered <- summary(fit_filtered)
+print(model_summary_filtered)
+
+# 计算过滤后的治疗组在各时间点的估计边��均值
+emm_filtered <- emmeans(fit_filtered, ~ TRT01A | AVISITN)
+print(emm_filtered)
 ```
 
 # draw ci
@@ -296,6 +640,7 @@ result_table
 
 
 ```
+
 # main result with controling sex
 
 ```{r}
@@ -411,14 +756,11 @@ BIC(fit_lm)
 logLik(fit_lm)
 ```
 
-
 # draw subgroups
-
-
 
 ## ≥18 to 24 young adults
 
-```r
+``` r
 # 加载必要的包
 library(readxl)
 library(mmrm)
@@ -462,11 +804,11 @@ fit <- mmrm(
 # 查看模型结果
 model_summary <- summary(fit)
 print(model_summary)
-
-
 ```
-##  ≥18 to 24 young adults 分析
-```r
+
+## ≥18 to 24 young adults 分析
+
+``` r
 
 # 加载必要的包
 library(emmeans)
@@ -514,12 +856,11 @@ tryCatch({
   cat("年轻成人组的对比分析出错:", conditionMessage(e), "\n")
   results_young <- data.frame()
 })
-
 ```
 
-
 ## middle-aged adults (≥24 to 55 years)
-```r
+
+``` r
 # 加载必要的包
 library(readxl)
 library(mmrm)
@@ -564,8 +905,10 @@ fit <- mmrm(
 model_summary <- summary(fit)
 print(model_summary)
 ```
+
 ## middle-aged adults (≥24 to 55 years)分析
-```r
+
+``` r
 
 ############## 中年成人分析 ##############
 # 读取中年成人数据并拟合模型
@@ -592,11 +935,11 @@ tryCatch({
   cat("中年成人组的对比分析出错:", conditionMessage(e), "\n")
   results_middle <- data.frame()
 })
-
 ```
 
 ## ≥55 older adults
-```r
+
+``` r
 # 加载必要的包
 library(readxl)
 library(mmrm)
@@ -641,8 +984,10 @@ fit <- mmrm(
 model_summary <- summary(fit)
 print(model_summary)
 ```
+
 ## ≥55 older adults 分析
-```r
+
+``` r
 ############## 老年成人分析 ##############
 # 读取老年成人数据并拟合模型
 # (假设这里已经完成)
@@ -669,8 +1014,10 @@ tryCatch({
   results_older <- data.frame()
 })
 ```
+
 ## 年龄组疗效
-```r
+
+``` r
 ############## 比较不同年龄组疗效差异 ##############
 cat("\n### 比较不同年龄组疗效差异 ###\n")
 
@@ -847,7 +1194,8 @@ if(nrow(significant_diffs) > 0) {
   print(significant_diffs)
 }
 ```
-```r
+
+``` r
 # 创建年龄组显著性热图
 if(nrow(young_vs_middle_table) > 0 && nrow(young_vs_older_table) > 0 && nrow(middle_vs_older_table) > 0) {
   # 准备热图数据
@@ -967,8 +1315,6 @@ cat("   - 根据不同年龄组的反应差异，可能需要考虑针对特定�
 cat("   - 特别关注对治疗反应较弱的年龄组，可能需要增加治疗强度或辅助治疗\n")
 cat("   - 应进一步研究年龄相关的药代动力学和药效学差异，以优化治疗策略\n")
 ```
-
-
 
 ## 主要疗效分析（Day28）
 
@@ -1596,6 +1942,268 @@ diag_plot <- diag_plot + plot_annotation(
 )
 
 diag_plot
+
+
+
+```
+
+```{r}
+library(bsgof)
+library(statmod)
+library(openxlsx)
+
+# 样本生成函数
+generate_samples <- function(num_rows, alpha, beta, censor_rate) {
+  generate_type2_censored <- function(n, m, alpha, beta) {
+    full_times <- bsgof::rbs(n, alpha, beta)
+    sorted_times <- sort(full_times)
+    observed_times <- append(sorted_times[1:m], rep(sorted_times[m], n - m)) # 将第 m 个值重复 n - m 次（删失率达到指定比例结束实验）
+    status <- append(rep(1, m), rep(0, n - m))
+    return(list(
+      time = observed_times,
+      delta = status
+    ))
+  }
+  
+  # 使用lapply生成样本
+  n <- 30  # 每行样本大小
+  m <- n * (1 - censor_rate)  # 根据删失率计算失效数量
+  samples <- lapply(1:num_rows, function(i) generate_type2_censored(n, m, alpha, beta))
+  
+  return(samples)
+}
+
+# EM Algorithm
+bs_mixture_em <- function(t, delta, alpha_0, beta_0) {
+  # 定义核心函数
+  f_1 <- function(t, alpha, beta) {
+    (1 / (sqrt(2 * pi) * alpha * beta)) * (beta / t)^0.5 *
+      exp(-(1 / (2 * alpha^2)) * (t / beta + beta / t - 2))
+  }
+  
+  f_2 <- function(t, alpha, beta) {
+    (1 / (sqrt(2 * pi) * alpha * beta)) * (beta / t)^1.5 *
+      exp(-(1 / (2 * alpha^2)) * (t / beta + beta / t - 2))
+  }
+  
+  calculate_epsilon <- function(t, alpha, beta) {
+    numerator <- 0.5 * f_1(t, alpha, beta)
+    denominator <- numerator + 0.5 * f_2(t, alpha, beta)
+    return(numerator / denominator)
+  }
+  
+  calculate_gamma <- function(t, alpha, beta) {
+    s1 <- 1 - (2 * pnorm(1 / alpha * (sqrt(t / beta) - sqrt(beta / t))) -
+                 pinvgauss(t, mean = beta, shape = beta / alpha^2, dispersion = NULL, lower.tail = TRUE, log.p = FALSE))
+    s2 <- 1 - pinvgauss(t, mean = beta, shape = beta / alpha^2, lower.tail = TRUE, log.p = FALSE)
+    return(s1 / (s1 + s2))
+  }
+  
+  calculate_T_star <- function(t, alpha, beta) {
+    tryCatch({
+      integrand <- function(x) x * (0.5 * f_1(x, alpha, beta) + 0.5 * f_2(x, alpha, beta))
+      integral <- integrate(integrand, t, Inf, rel.tol = 1e-8)$value
+      survival <- 1 - pnorm(1 / alpha * (sqrt(t / beta) - sqrt(beta / t)))
+      ifelse(survival > 1e-10, integral / survival, t)
+    }, error = function(e) t)
+  }
+  
+  n <- length(t)
+  tol <- 1e-10
+  params_history <- data.frame(
+    alpha = numeric(0),
+    beta = numeric(0)
+  )
+  
+  # 初始参数
+  current <- list(alpha = alpha_0, beta = beta_0)
+  params_history <- rbind(params_history, current)
+  
+  converged <- FALSE
+  iter <- 0
+  
+  while (!converged) {
+    iter <- iter + 1
+    
+    # E步：
+    uncensored <- t[delta == 1]
+    censored <- t[delta == 0]
+    
+    epsilon <- sapply(uncensored, calculate_epsilon, current$alpha, current$beta)
+    gamma <- sapply(censored, calculate_gamma, current$alpha, current$beta)
+    T_star <- sapply(censored, calculate_T_star, current$alpha, current$beta)
+    
+    # M步：
+    sum1 <- sum(gamma) + sum(epsilon)
+    sum2 <- sum(T_star) + sum(uncensored)
+    sum3 <- sum(1 / T_star) + sum(1 / uncensored)
+    
+    g <- function(beta) sum1 + (n / 2) * (-sum2 + beta^2 * sum3) / (sum2 + beta^2 * sum3) - n / 2
+    beta_new <- uniroot(g, c(0, 1e6), tol = 1e-12)$root
+    alpha_new <- sqrt((1 / n) * (sum2 / beta_new + beta_new * sum3 - 2 * n))
+    
+    # 记录参数历史
+    new_params <- list(alpha = alpha_new, beta = beta_new)
+    params_history <- rbind(params_history, new_params)
+    
+    # 收敛检查
+    last_two <- tail(params_history, 2)
+    alpha_change <- abs(diff(last_two$alpha)) / last_two$alpha[1]
+    beta_change <- abs(diff(last_two$beta)) / last_two$beta[1]
+    
+    if (all(c(alpha_change, beta_change) <= tol)) {
+      last_three <- tail(params_history, 3)
+      final_check <- sapply(last_three, function(x) {
+        abs(diff(range(x))) / tail(x, 1)
+      })
+      
+      if (all(final_check <= tol)) {
+        converged <- TRUE
+      }
+    }
+    
+    current <- new_params
+  }
+  
+  final_params <- tail(params_history, 1)
+  output <- list(
+    alpha = final_params$alpha,
+    beta = final_params$beta,
+    iterations = iter,
+    convergence = list(
+      criteria = "Relative change <= tol",
+      last_alpha_change = alpha_change,
+      last_beta_change = beta_change,
+      params_history = params_history
+    )
+  )
+  
+  return(output)
+}
+
+# 表格函数
+analyze_samples <- function(samples, alpha_0, beta_0) {
+  # 使用sapply对每行样本运行 EM 算法
+  results <- t(sapply(samples, function(sample) {
+    result <- bs_mixture_em(sample$time, sample$delta, alpha_0, beta_0)
+    c(result$alpha, result$beta)
+  }))
+  
+  # 计算统计量
+  alpha_mean <- mean(results[, 1])
+  alpha_sd <- sd(results[, 1])
+  beta_mean <- mean(results[, 2])
+  beta_sd <- sd(results[, 2])
+  cov_matrix <- cov(results)
+  
+  return(list(
+    alpha_mean = alpha_mean,
+    alpha_sd = alpha_sd,
+    beta_mean = beta_mean,
+    beta_sd = beta_sd,
+    cov_matrix = cov_matrix
+  ))
+}
+
+set.seed(123)
+
+# 参数设置
+num_rows <- 10000
+beta <- 1.0
+alpha_values <- c(2)
+censor_rates <- c(0.4,0.6)
+alpha_0 <- 1.0
+beta_0 <- 0.5
+
+# 使用lapply和sapply组合循环
+results_list <- lapply(alpha_values, function(alpha) {
+  lapply(censor_rates, function(censor_rate) {
+    print(paste("Processing alpha =", alpha, "and censor_rate =", censor_rate))
+    samples <- generate_samples(num_rows, alpha, beta, censor_rate)
+    result <- analyze_samples(samples, alpha_0, beta_0)
+    
+    # 提取协方差矩阵的对角线元素（作为协方差）
+    covariance <- sum(diag(result$cov_matrix))
+    
+    # 返回结果
+    result_df <- data.frame(
+      Alpha = alpha,
+      Censoring_Proportion = censor_rate,
+      Alpha_Mean = result$alpha_mean,
+      Alpha_SD = result$alpha_sd,
+      Beta_Mean = result$beta_mean,
+      Beta_SD = result$beta_sd,
+      Covariance = covariance
+    )
+    
+    # 立即打印结果
+    print(result_df)
+    
+    return(result_df)
+  })
+})
+
+# 将结果列表转换为数据框
+results_table <- do.call(rbind, unlist(results_list, recursive = FALSE))
+
+# 输出结果表格
+print(results_table)
+
+# 保存到Excel文件
+#file_path <- "results_table.xlsx"
+#write.xlsx(results_table, file_path)
+```
+
+```{r}
+# Define the coefficients matrix A
+A <- matrix(c(
+  -1, 1, 0, -26,
+  1, 1, -26, 0,
+  0, 1, -1, -1,
+  1, 0, -1, 10
+), nrow = 4, byrow = TRUE)
+
+# Define the constants vector B
+B <- c(1, 0, 0, 5)
+
+# Solve the system of equations
+solution <- solve(A, B)
+
+# Print the solution
+print(solution)
+
+# fraction instead of decimal
+
+# Install the nleqslv package if you haven't already
+ install.packages("nleqslv")
+
+library(nleqslv)
+
+# Define the system of equations
+equations <- function(vars) {
+  a <- vars[1]
+  b <- vars[2]
+  c <- vars[3]
+  d <- vars[4]
+  
+  return(c(
+    -a + b - 26 * d - 1,
+    b + a - 26 * c,
+    -c + b - d,
+    d + a - c + 5
+  ))
+}
+
+# Initial guesses for a, b, c, d
+initial_values <- c(0, 0, 0, 0)
+
+# Solve the equations
+solution <- nleqslv(initial_values, equations)
+
+# Print the solution
+print(solution$x)
+
+
 
 
 
