@@ -6,6 +6,8 @@ website:
   title: "2025 XJTLU Biomedical Competition"
   navbar:
     left:
+      - href: https://yuuuulu.github.io/
+        text: homepage
       - href: mainCode.qmd
         text: MainCodes
       - href: 亚组2.html
